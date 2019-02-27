@@ -215,7 +215,7 @@ void update_confusion_matrix_per_region(
     DLIB_CASSERT(ground_truth_label_image.nc() == result_label_image.nc());
 
     const unsigned long ground_truth_blob_count = dlib::label_connected_blobs(ground_truth_label_image, zero_pixels_are_background(), neighbors_8(), connected_if_equal(), temp.ground_truth_blobs);
-    const unsigned long result_blob_count       = dlib::label_connected_blobs(result_label_image,       zero_pixels_are_background(), neighbors_8(), connected_if_equal(), temp.result_blobs);
+    const unsigned long result_blob_count = dlib::label_connected_blobs(result_label_image, zero_pixels_are_background(), neighbors_8(), connected_if_equal(), temp.result_blobs);
 
     const auto vote_blob_class = [&](int blob_number, const dlib::matrix<int>& blobs) {
         std::unordered_map<uint16_t, size_t> votes_ground_truth;
@@ -310,6 +310,7 @@ int main(int argc, char** argv) try
 
     options.add_options()
         ("i,input-directory", "Input image directory", cxxopts::value<std::string>())
+        ("modelFileName", "Set the model file name", cxxopts::value<std::string>()->default_value("annonet.dnn"))
         ("g,gain", "Supply a class-specific gain, for example: 1:-0.5", cxxopts::value<std::vector<std::string>>())
         ("d,detection", "Supply a class-specific detection level that _comes on top of gain_, for example: 1:1.5", cxxopts::value<std::vector<std::string>>())
         ("w,tile-max-width", "Set max tile width", cxxopts::value<int>()->default_value(default_max_tile_width))
@@ -336,7 +337,8 @@ int main(int argc, char** argv) try
     double downscaling_factor = 1.0;
     std::string serialized_runtime_net;
     std::string anno_classes_json;
-    deserialize("annonet.dnn") >> anno_classes_json >> downscaling_factor >> serialized_runtime_net;
+    const std::string modelFileName = options["modelFileName"].as<std::string>();
+    deserialize(modelFileName) >> anno_classes_json >> downscaling_factor >> serialized_runtime_net;
 
     std::cout << "Deserializing annonet, downscaling factor = " << downscaling_factor << std::endl;
 
@@ -498,7 +500,7 @@ int main(int argc, char** argv) try
         print_confusion_matrix(confusion_matrix_per_region, anno_classes);
     }
 }
-catch(std::exception& e)
+catch (std::exception& e)
 {
     cout << e.what() << endl;
     return 1;

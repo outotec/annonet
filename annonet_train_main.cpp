@@ -171,8 +171,8 @@ std::string read_anno_classes_file(const std::string& folder)
 {
     const std::vector<file> files = get_files_in_directory_tree(folder,
         [](const file& name) {
-            return name.name() == "anno_classes.json";
-        }, 0); // do not scan subdirectories - the file must be in the root
+        return name.name() == "anno_classes.json";
+    }, 0); // do not scan subdirectories - the file must be in the root
 
     if (files.empty()) {
         std::cout << "Warning: no anno_classes.json file found in " + folder << std::endl;
@@ -236,6 +236,7 @@ int main(int argc, char** argv) try
         ("c,cached-image-count", "Cached image count", cxxopts::value<int>()->default_value("8"))
         ("data-loader-thread-count", "Number of data loader threads", cxxopts::value<unsigned int>()->default_value(default_data_loader_thread_count.str()))
         ("no-empty-label-image-warning", "Do not warn about empty label images")
+        ("modelFileName", "Set the output model file name", cxxopts::value<std::string>()->default_value("annonet.dnn"))
         ;
 
     try {
@@ -376,12 +377,12 @@ int main(int argc, char** argv) try
             for (const dlib::point& point : labeled_points.second) {
                 const unsigned long blob_index = blobs(point.y(), point.x());
                 blob_points[blob_index].push_back(point);
-                blob_minmax_x[blob_index].first  = std::min(point.x(), blob_minmax_x[blob_index].first);
+                blob_minmax_x[blob_index].first = std::min(point.x(), blob_minmax_x[blob_index].first);
                 blob_minmax_x[blob_index].second = std::max(point.x(), blob_minmax_x[blob_index].second);
-                blob_minmax_y[blob_index].first  = std::min(point.y(), blob_minmax_y[blob_index].first);
+                blob_minmax_y[blob_index].first = std::min(point.y(), blob_minmax_y[blob_index].first);
                 blob_minmax_y[blob_index].second = std::max(point.y(), blob_minmax_y[blob_index].second);
             }
-       }
+        }
 
         decltype(sample.labeled_points_by_class) labeled_points_to_keep;
         for (unsigned long blob_index = 0; blob_index < blob_count; ++blob_index) {
@@ -393,7 +394,7 @@ int main(int argc, char** argv) try
                 if (points.size() > max_blob_point_count_to_keep) {
                     return true;
                 }
-                const auto blob_width  = [&]() { return blob_minmax_x[blob_index].second - blob_minmax_x[blob_index].first + 1; };
+                const auto blob_width = [&]() { return blob_minmax_x[blob_index].second - blob_minmax_x[blob_index].first + 1; };
                 const auto blob_height = [&]() { return blob_minmax_y[blob_index].second - blob_minmax_y[blob_index].first + 1; };
                 if (blob_width() > max_blob_width_to_keep || blob_height() > max_blob_height_to_keep) {
                     return true;
@@ -424,14 +425,14 @@ int main(int argc, char** argv) try
 
     shared_lru_cache_using_std<image_filenames, std::shared_ptr<sample>, std::unordered_map> full_images_cache(
         [&](const image_filenames& image_filenames) {
-            std::shared_ptr<sample> sample(new sample);
-            *sample = read_sample(image_filenames, anno_classes, true, initial_downscaling_factor);
-            ignore_classes_to_ignore(*sample);
-            return sample;
-        }, cached_image_count);
+        std::shared_ptr<sample> sample(new sample);
+        *sample = read_sample(image_filenames, anno_classes, true, initial_downscaling_factor);
+        ignore_classes_to_ignore(*sample);
+        return sample;
+    }, cached_image_count);
 
     cout << endl << "Now training..." << endl;
-   
+
     set_low_priority();
 
     // Start a bunch of threads that read images from disk and pull out random crops.  It's
@@ -441,7 +442,7 @@ int main(int argc, char** argv) try
     dlib::pipe<crop> data(2 * minibatch_size);
     auto pull_crops = [&data, &full_images_cache, &image_files, actual_input_dimension, &options](time_t seed)
     {
-        dlib::rand rnd(time(0)+seed);
+        dlib::rand rnd(time(0) + seed);
         NetPimpl::input_type input_image;
         matrix<uint16_t> index_label_image;
         crop crop;
@@ -472,17 +473,18 @@ int main(int argc, char** argv) try
     for (unsigned int i = 0; i < data_loader_thread_count; ++i) {
         data_loaders.push_back(std::thread([pull_crops, i]() { pull_crops(i); }));
     }
-    
+
     size_t minibatch = 0;
+    const std::string modelFileName = options["modelFileName"].as<std::string>();
 
     const auto save_inference_net = [&]() {
         const NetPimpl::RuntimeNet runtime_net = training_net.GetRuntimeNet();
-        
+
         std::ostringstream serialized;
         runtime_net.Serialize(serialized);
 
         cout << "saving network" << endl;
-        serialize("annonet.dnn") << anno_classes_json << (initial_downscaling_factor * further_downscaling_factor) << serialized.str();
+        serialize(modelFileName) << anno_classes_json << (initial_downscaling_factor * further_downscaling_factor) << serialized.str();
     };
 
     std::set<std::string> warnings_already_printed;
@@ -535,7 +537,7 @@ int main(int argc, char** argv) try
 
     save_inference_net();
 }
-catch(std::exception& e)
+catch (std::exception& e)
 {
     cout << e.what() << endl;
     return 1;
